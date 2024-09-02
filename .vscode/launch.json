@@ -17,6 +17,30 @@
       "request": "launch",
       "program": "${workspaceFolder}/gpt.py",
       "console": "integratedTerminal"
+    },
+    {
+      "name": "generate.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/generate.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "train_with_multi_gpu.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "/opt/anaconda3/envs/zwx-seg/bin/torchrun",
+      // "module": "torch.distributed.run",
+      "args": [
+        "--standalone",
+        "--nproc_per_node=2",
+        "train_with_multi_gpu.py"
+      ],
+      "env": {
+        "CUDA_VISIBLE_DEVICES": "1,3",
+      },
+      "console": "integratedTerminal",
+      "justMyCode": true,
     }
   ]
 }

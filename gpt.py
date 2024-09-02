@@ -1,7 +1,10 @@
+import inspect
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import argparse
+
+from config import GPTConfig
 
 class Head(nn.Module):
     """ one head of self-attention """
@@ -76,17 +79,17 @@ class Block(nn.Module):
         x = x + self.ffwd(self.ln2(x))
         return x
 
-class GPTLanguageModel(nn.Module):
+class GPT(nn.Module):
 
-    def __init__(self, args):
+    def __init__(self, gptconf):
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table
-        self.args = args
-        self.token_embedding_table = nn.Embedding(args.vocab_size, args.embed_dim)
-        self.position_embedding_table = nn.Embedding(args.time_step, args.embed_dim)
-        self.blocks = nn.Sequential(*[Block(args.time_step, args.embed_dim, args.n_head) for _ in range(args.n_layer)])
-        self.ln_f = nn.LayerNorm(args.embed_dim) # final layer norm
-        self.lm_head = nn.Linear(args.embed_dim, args.vocab_size)
+        self.gptconf = gptconf
+        self.token_embedding_table = nn.Embedding(gptconf.vocab_size, gptconf.embed_dim)
+        self.position_embedding_table = nn.Embedding(gptconf.time_step, gptconf.embed_dim)
+        self.blocks = nn.Sequential(*[Block(gptconf.time_step, gptconf.embed_dim, gptconf.n_head) for _ in range(gptconf.n_layer)])
+        self.ln_f = nn.LayerNorm(gptconf.embed_dim) # final layer norm
+        self.lm_head = nn.Linear(gptconf.embed_dim, gptconf.vocab_size)
 
         # better init, not covered in the original GPT video, but important, will cover in followup video
         self.apply(self._init_weights)
@@ -104,7 +107,7 @@ class GPTLanguageModel(nn.Module):
 
         # idx and targets are both (B,T) tensor of integers
         tok_emb = self.token_embedding_table(idx) # (B,T,C), shape: [64, 256, 384]
-        pos_emb = self.position_embedding_table(torch.arange(T, device=self.args.device)) # (T,C), shape: [256, 384]
+        pos_emb = self.position_embedding_table(torch.arange(T, device=idx.device)) # (T,C), shape: [256, 384]
         x = tok_emb + pos_emb # (B,T,C), shape: [64, 256, 384]
         x = self.blocks(x) # (B,T,C), shape: [64, 256, 384]
         x = self.ln_f(x) # (B,T,C), shape: [64, 256, 384]
@@ -124,7 +127,7 @@ class GPTLanguageModel(nn.Module):
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last time_step tokens
-            idx_cond = idx[:, -self.args.time_step:]
+            idx_cond = idx[:, -self.gptconf.time_step:]
             # get the predictions
             logits, loss = self(idx_cond) # self.forward(idx_cond), logits: [B, T, C]
             # focus only on the last time step, get the prediction of T+1 token
@@ -139,23 +142,21 @@ class GPTLanguageModel(nn.Module):
 
 if __name__ == "__main__":
     # hyper parameters
-    B, T, C = 64, 256, 384
-    parser = argparse.ArgumentParser(description="Hyper parameters for GPT")
-    args = parser.parse_args()
-    args.batch_size = B
-    args.time_step = T
-    args.embed_dim = C
-    args.vocab_size = 65
-    args.n_head = 6
-    args.n_layer = 6
-    args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    gptconf = GPTConfig(**{"vocab_size":65})
+    B, T, C = gptconf.batch_size, gptconf.time_step, gptconf.embed_dim
+
+    # input
+    input = torch.randint(low=0, high=gptconf.vocab_size, size=(B, T), device=device)
+
+    # model
+    model = GPT(gptconf)
+    model.to(device)
+
     # forward
-    input = torch.randint(low=0, high=args.vocab_size, size=(B, T), device=args.device)
-    model = GPTLanguageModel(args).to(args.device)
     output, loss = model(input)
     print(output.shape)
 
     # generate
-    context = torch.zeros((1, 2), dtype=torch.long, device=args.device) # (B, T) 
+    context = torch.zeros((1, 2), dtype=torch.long, device=device) # (B, T) 
     print(model.generate(context, max_new_tokens=10)[0].tolist()) # (B, T + max_new_tokens)
