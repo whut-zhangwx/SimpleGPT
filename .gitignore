@@ -5,3 +5,6 @@
 /gpt_deprecated.py
 /more.txt
 /state_dict
+/tinyshakespeare/meta.pkl
+/tinyshakespeare/train.bin
+/tinyshakespeare/val.bin
