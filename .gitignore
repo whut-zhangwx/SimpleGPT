@@ -1,10 +1,12 @@
 # /. gitignore
+# git rm -r --cached [file1] [file2]
 /__pycache__
 /draft*.py
-/out
+/out/ckpt_iter_50000.pt
 /gpt_deprecated.py
 /more.txt
 /state_dict
 /tinyshakespeare/meta.pkl
 /tinyshakespeare/train.bin
 /tinyshakespeare/val.bin
+# /testddp.py

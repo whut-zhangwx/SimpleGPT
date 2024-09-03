@@ -7,6 +7,7 @@ $ python train.py --batch_size=32 --compile=False
 
 To run with DDP on 4 gpus on 1 node, example:
 $ torchrun --standalone --nproc_per_node=4 train_with_multi_gpu.py
+$ CUDA_VISIBLE_DEVICES=1,2,3,4 torchrun --standalone --nproc_per_node=4 train_with_multi_gpu.py
 
 To run with DDP on 4 gpus across 2 nodes, example:
 - Run on the first (master) node with example IP 123.456.123.456:
@@ -27,16 +28,16 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPT
+from gpt import GPT
 from config import GPTConfig
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 out_dir = 'out'
-eval_interval = 100
+eval_interval = 1000
 log_interval = 1
-eval_iters = 3
+eval_iters = 500
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
@@ -48,33 +49,36 @@ wandb_run_name = 'gpt2' # 'run' + str(time.time())
 data_dir = './tinyshakespeare'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
-time_step = 256 # time_step
+time_step = 256 # block_size
 
 # model
-n_layer = 6
-n_head = 6
-embed_dim = 384
+# n_layer = 6
+# n_head = 6
+# embed_dim = 384
+n_layer = 12
+n_head = 12
+embed_dim = 768
 dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
 bias = False # do we use bias inside LayerNorm and Linear layers?
 
 # adamw optimizer
 learning_rate = 6e-4 # max learning rate
-max_iters = 8 # total number of training iterations
+max_iters = 50000 # total number of training iterations
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 2 # how many steps to warm up for
-lr_decay_iters = 8 # should be ~= max_iters per Chinchilla
+warmup_iters = 200 # how many steps to warm up for
+lr_decay_iters = 50000 # should be ~= max_iters per Chinchilla
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = 'nccl' # 'nccl', 'gloo', etc.
 # system
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-compile = True # use PyTorch 2.0 to compile the model to be faster
+compile = False # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -154,7 +158,9 @@ if os.path.exists(meta_path):
     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 # model init
-model_args = dict(vocab_size=meta_vocab_size) # start with model_args from command line
+model_args = dict(n_layer=n_layer, n_head=n_head, embed_dim=embed_dim, time_step=time_step,
+                  bias=bias, vocab_size=meta_vocab_size, dropout=dropout) # start with model_args from command line
+
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -193,7 +199,7 @@ elif init_from.startswith('gpt2'):
     override_args = dict(dropout=dropout)
     model = GPT.from_pretrained(init_from, override_args)
     # read off the created config params, so we can store them into checkpoint correctly
-    for k in ['n_layer', 'n_head', 'n_embd', 'time_step', 'bias', 'vocab_size']:
+    for k in ['n_layer', 'n_head', 'embed_dim', 'time_step', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
 # crop down the model block size if desired, using model surgery
 if time_step < model.config.time_step:
@@ -287,7 +293,8 @@ while True:
             best_val_loss = losses['val']
             if iter_num > 0:
                 checkpoint = {
-                    'model': raw_model.state_dict(),
+                    # 'model': raw_model.state_dict(),
+                    'state_dict': raw_model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'model_args': model_args,
                     'iter_num': iter_num,

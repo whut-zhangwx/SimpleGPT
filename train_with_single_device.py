@@ -6,7 +6,7 @@ import torch
 import numpy
 
 
-from gpt import GPT
+from gpt_old import GPT
 # from model import GPT
 from config import GPTConfig
 
