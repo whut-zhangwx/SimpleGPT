@@ -10,3 +10,6 @@
 /tinyshakespeare/train.bin
 /tinyshakespeare/val.bin
 # /testddp.py
+*.sarif
+tempCodeRunnerFile*.py
+/onnx/*.onnx

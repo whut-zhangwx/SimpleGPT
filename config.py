@@ -2,9 +2,9 @@ from dataclasses import dataclass
 
 @dataclass
 class GPTConfig:
-    batch_size: int = 64
+    batch_size: int = 256
     time_step: int = 256 # block_size
-    embed_dim: int = 384
+    embed_dim: int = 768
 
     vocab_size: int = None
     ''' character-level, vocab_size: 65
@@ -15,8 +15,8 @@ class GPTConfig:
     'n': 52, 'o': 53, 'p': 54, 'q': 55, 'r': 56, 's': 57, 't': 58, 'u': 59, 'v': 60, 'w': 61, 'x': 62, 'y': 63, 'z': 64}
     '''
 
-    n_layer: int = 6
-    n_head: int = 6
+    n_layer: int = 12
+    n_head: int = 12
     
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
